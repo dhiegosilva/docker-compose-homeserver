@@ -46,6 +46,16 @@ services:
     container_name: metabase
     image: metabase/metabase:latest
     restart: unless-stopped
+    environment:
+      MB_SITE_LOCALE: de
+      MB_START_OF_WEEK: monday
+      TZ: Europe/Berlin
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: 5432
+      MB_DB_USER: dhiego
+      MB_DB_PASS: f4x4d8p6
+      MB_DB_HOST: dhiego-server
     ports:
       - "80:3000"
 
@@ -80,7 +90,7 @@ services:
       POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=de-DE'
       TZ: Europe/Berlin
       PGTZ: Europe/Berlin
-      POSTGRES_DB: homeserver
+      POSTGRES_DB: metabase
       POSTGRES_USER: dhiego
       POSTGRES_PASSWORD: f4x4d8p6
     ports:

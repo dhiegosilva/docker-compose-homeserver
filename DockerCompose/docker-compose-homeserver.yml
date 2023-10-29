@@ -5,7 +5,7 @@ services:
     image: containrrr/watchtower:latest
     restart: unless-stopped
     container_name: watchtower
-    command: --interval 30 mqtt openhab postgreSQL watchtower
+    command: --interval 30 mqtt openhab postgreSQL watchtower pgadmin4
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/.docker/config.json:/config.json
@@ -48,6 +48,26 @@ services:
     restart: unless-stopped
     ports:
       - "80:3000"
+
+  postgres-pgadmin4:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin4
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: dhiego.silva@hotmail.com
+      PGADMIN_DEFAULT_PASSWORD: f4x4d8p6
+      TZ: Europe/Berlin
+#      LDAP_AUTO_CREATE_USER: True
+#      LDAP_SERVER_URI: ldap://10.1.200.102:389
+#      LDAP_BIND_PASSWORD: 3cpGUdJFVJTHAGR2muUc
+#      LDAP_SEARCH_BASE_DN: OU=FRANKFURT,OU=USERS,OU=DEGUSSA,DC=degussa,DC=local
+#      LDAP_SEARCH_FILTER: (&(userPrincipalName={login}))
+#      LDAP_USERNAME_ATTRIBUTE: userPrincipalName
+#      LDAP_CONNECTION_TIMEOUT: 10
+    #volumes:
+    #  - ./pgadmin:/var/lib/pgadmin
+    ports:
+      - '3002:80'
 
   postgreSQL:
     image: postgres:16-alpine

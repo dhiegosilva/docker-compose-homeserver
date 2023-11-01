@@ -15,9 +15,10 @@ services:
     image: containrrr/watchtower:latest
     restart: unless-stopped
     container_name: watchtower
-    command: --interval 30 metabase mqtt openhab postgreSQL pgadmin4 zookeeper
+    command: --interval 30 metabase mqtt openhab postgreSQL pgadmin4 zookeeper watchtower
     environment:
       - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_INCLUDE_RESTARTING=true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /etc/timezone:/etc/timezone:ro

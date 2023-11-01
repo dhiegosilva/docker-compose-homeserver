@@ -1,0 +1,194 @@
+version: "3.9"
+services:
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    restart: unless-stopped
+    container_name: watchtower
+    command: --interval 30 mqtt openhab postgreSQL watchtower pgadmin4 zookeeper kafka spark spark-worker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/.docker/config.json:/config.json
+    ports:
+      - "3001:8080"
+
+  openhab:
+    image: openhab/openhab:latest
+    container_name: openhab
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      CRYPTO_POLICY: "unlimited"
+      EXTRA_JAVA_OPTS: "-Duser.timezone=Europe/Berlin"
+      PGADMIN_DEFAULT_PASSWORD: f4x4d8p6
+      OPENHAB_HTTP_PORT: "8080"
+      OPENHAB_HTTPS_PORT: "8443"
+    volumes:
+      - ./openhab/openhab_addons:/openhab/addons
+      - ./openhab/openhab_conf:/openhab/conf
+      - ./openhab/openhab_userdata:/openhab/userdata
+    privileged: true
+
+  mosquitto:
+    container_name: mqtt
+    image: eclipse-mosquitto:latest
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    ports:
+      - 1883:1883
+      - 8883:8883
+      - 9001:9001
+
+  metabase:
+    container_name: metabase
+    image: metabase/metabase:latest
+    restart: unless-stopped
+    depends_on:
+      - postgreSQL
+    environment:
+      MB_SITE_LOCALE: de
+      MB_START_OF_WEEK: monday
+      TZ: Europe/Berlin
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: 5432
+      MB_DB_USER: dhiego
+      MB_DB_PASS: f4x4d8p6
+      #      MB_DB_HOST: dhiego-server
+      MB_DB_HOST: 192.168.0.164
+    ports:
+      - "3000:3000"
+
+  postgres-pgadmin4:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin4
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: dhiego.silva@hotmail.com
+      PGADMIN_DEFAULT_PASSWORD: f4x4d8p6
+      TZ: Europe/Berlin
+    #      LDAP_AUTO_CREATE_USER: True
+    #      LDAP_SERVER_URI: ldap://10.1.200.102:389
+    #      LDAP_BIND_PASSWORD: 3cpGUdJFVJTHAGR2muUc
+    #      LDAP_SEARCH_BASE_DN: OU=FRANKFURT,OU=USERS,OU=DEGUSSA,DC=degussa,DC=local
+    #      LDAP_SEARCH_FILTER: (&(userPrincipalName={login}))
+    #      LDAP_USERNAME_ATTRIBUTE: userPrincipalName
+    #      LDAP_CONNECTION_TIMEOUT: 10
+    volumes:
+      - ./pgadmin:/var/lib/pgadmin
+    ports:
+      - '3002:80'
+
+  postgreSQL:
+    image: postgres:16-alpine
+    container_name: postgreSQL
+    volumes:
+      - ./postgres/postgresDATA:/var/lib/postgresql/data
+    restart: unless-stopped
+    command: [ "-c", "shared_buffers=3GB", "-c", "max_connections=200", "-c", "work_mem=1GB", "-c", "random_page_cost=1.1", "-c", "effective_io_concurrency=200", "-c", "wal_buffers=128MB" ]
+    environment:
+      POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=de-DE'
+      TZ: Europe/Berlin
+      PGTZ: Europe/Berlin
+      POSTGRES_DB: metabase
+      POSTGRES_USER: dhiego
+      POSTGRES_PASSWORD: f4x4d8p6
+    ports:
+      - '5432:5432'
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    ports:
+      - "2181:2181"
+    #    volumes:
+    #      - zk-data:/var/lib/zookeeper/data # for Data
+    #      - zk-txn-logs:/var/lib/zookeeper/log # for transaction logs
+    ##########################KafkA#########################
+    # Each Kafka listener will be confgiured for each ip/domain with a unique port #
+    # ex localhost:port will have local host access to docker container and external host services #
+    # ex kafka:port will only have access internally to all containers within a same network #
+    # ex ip:port will have external access from other host to this host #
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    restart: unless-stopped
+    environment:
+      ## COnfigure listener here like ip:port for external access and localhost:port for host only access
+      ## or configure localhost:port1 & ip:port2 together for enabling host as well as external access both
+      ## Here Plaintext refers to Protocol for Kafka
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      ### For listening to multiple listeners add the name as follows below with different ports for each
+      # LISTENER_1://localhost:29092,LISTENER_2://10.138.154.16:9092
+      ### Then mention the same in KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+      # KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_BROKER_ID: 2
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+  #      - 29092:29092 uncomment for multiple listeners and add more ports for each listener
+  #    volumes:
+  #      - kafka-data:/var/lib/kafka/data
+
+  ############ Uncomment to enable volumes for mounting for data persistence and volumes in each service
+  #volumes:
+  #  kafka-data:
+  #    driver: local
+  #    driver_opts:
+  #      o: bind
+  #      type: none
+  #      device: /var/db/kafka/data
+  #  zk-data:
+  #    driver: local
+  #    driver_opts:
+  #      o: bind
+  #      type: none
+  #      device: /var/db/zk/data
+  #  zk-txn-logs:
+  #    driver: local
+  #    driver_opts:
+  #      o: bind
+  #      type: none
+  #      device: /var/db/zk/txn-logs
+
+  #  zookeeper:
+  #    container_name: zookeeper
+  #    image: zookeeper:latest
+  #    ports:
+  #      - "2181:2181"
+  #    environment:
+  #      - ZOO_MY_ID=1
+
+  spark:
+    image: docker.io/bitnami/spark:latest
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_USER=spark
+    ports:
+      - '80:8080'
+
+  spark-worker:
+    image: docker.io/bitnami/spark:latest
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_USER=spark

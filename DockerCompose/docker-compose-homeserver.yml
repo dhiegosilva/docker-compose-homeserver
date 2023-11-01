@@ -15,7 +15,7 @@ services:
     image: containrrr/watchtower:latest
     restart: unless-stopped
     container_name: watchtower
-    command: --interval 30 mqtt openhab postgreSQL watchtower pgadmin4 zookeeper coordinator broker historical middlemanager router
+    command: --interval 30 metabase mqtt openhab postgreSQL pgadmin4 zookeeper
     environment:
       - WATCHTOWER_CLEANUP=true
     volumes:

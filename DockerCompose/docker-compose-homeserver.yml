@@ -1,18 +1,13 @@
 version: "3.9"
 
 volumes:
-  metadata_data: { }
   middle_var: { }
   historical_var: { }
   broker_var: { }
   coordinator_var: { }
   router_var: { }
   druid_shared: { }
-  zk-data: { }
-  zk-txns: { }
-  zk-logs: { }
-  kafka-data: { }
-  kafka-logs: { }
+
 
 services:
 
@@ -20,7 +15,7 @@ services:
     image: containrrr/watchtower:latest
     restart: unless-stopped
     container_name: watchtower
-    command: --interval 30 metabase mqtt openhab postgreSQL pgadmin4 zookeeper watchtower
+    command: --interval 30 metabase mqtt openhab postgres pgadmin4 zookeeper watchtower
     environment:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_INCLUDE_RESTARTING=true
@@ -67,16 +62,16 @@ services:
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
     ports:
-      - 1883:1883
-      - 8883:8883
-      - 9001:9001
+      - "1883:1883"
+      - "8883:8883"
+      - "9001:9001"
 
   metabase:
     container_name: metabase
     image: metabase/metabase:latest
     restart: unless-stopped
     depends_on:
-      - postgreSQL
+      - postgres
     environment:
       MB_SITE_LOCALE: de
       MB_START_OF_WEEK: monday
@@ -111,13 +106,19 @@ services:
     ports:
       - '3002:80'
 
-  postgreSQL:
-    image: postgres:16-alpine
-    container_name: postgreSQL
+  postgres:
+    image: debezium/postgres:16-alpine
+    container_name: postgres
     volumes:
       - ./postgres/postgresDATA:/var/lib/postgresql/data
     restart: unless-stopped
-    command: [ "-c", "shared_buffers=3GB", "-c", "max_connections=200", "-c", "work_mem=1GB", "-c", "random_page_cost=1.1", "-c", "effective_io_concurrency=200", "-c", "wal_buffers=128MB", "-c", "wal_level=logical" ]
+    #    command: [ "-c", "shared_buffers=3GB", "-c", "max_connections=1000", "-c", "work_mem=1GB", "-c", "random_page_cost=1.1", "-c", "effective_io_concurrency=200", "-c", "wal_buffers=128MB", "-c", "wal_level=logical" ]
+    command: [ "-c", "max_connections=1000", "-c", "random_page_cost=1.1", "-c", "effective_io_concurrency=200", "-c", "wal_level=logical" ]
+    healthcheck:
+      test: [ 'CMD', 'psql', '-U', 'dhiego',"-d", "metabase", '-c', 'SELECT 1' ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     environment:
       POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=de-DE'
       TZ: Europe/Berlin
@@ -132,8 +133,15 @@ services:
     container_name: zookeeper
     image: zookeeper:latest
     restart: unless-stopped
+    healthcheck:
+      test: echo srvr | nc zookeeper 2181 || exit 1
+      start_period: 10s
+      retries: 20
+      interval: 10s
     ports:
       - "2181:2181"
+      - "2888:2888"
+      - "3888:3888"
     environment:
       - ZOO_MY_ID=1
 
@@ -147,27 +155,27 @@ services:
       - coordinator_var:/opt/druid/var
     depends_on:
       - zookeeper
-      - postgreSQL
+      - postgres
     ports:
-      - "8081:8081"
+      - "7081:8081"
     command:
       - coordinator
     env_file:
       - environment
 
-  broker:
+  brokerdruid:
     image: apache/druid:27.0.0
-    container_name: broker
+    container_name: brokerdruid
     restart: unless-stopped
 
     volumes:
       - broker_var:/opt/druid/var
     depends_on:
       - zookeeper
-      - postgreSQL
+      - postgres
       - coordinator
     ports:
-      - "8082:8082"
+      - "7082:8082"
     command:
       - broker
     env_file:
@@ -183,10 +191,10 @@ services:
       - historical_var:/opt/druid/var
     depends_on:
       - zookeeper
-      - postgreSQL
+      - postgres
       - coordinator
     ports:
-      - "8083:8083"
+      - "7083:8083"
     command:
       - historical
     env_file:
@@ -202,11 +210,11 @@ services:
       - middle_var:/opt/druid/var
     depends_on:
       - zookeeper
-      - postgreSQL
+      - postgres
       - coordinator
     ports:
-      - "8091:8091"
-      - "8100-8105:8100-8105"
+      - "7091:8091"
+      - "7100-7105:8100-8105"
     command:
       - middleManager
     env_file:
@@ -221,7 +229,7 @@ services:
       - router_var:/opt/druid/var
     depends_on:
       - zookeeper
-      - postgreSQL
+      - postgres
       - coordinator
     ports:
       - "8888:8888"
@@ -230,72 +238,119 @@ services:
     env_file:
       - environment
 
-  kafka:
-    image: debezium/kafka:latest
-    restart: unless-stopped
-    ports:
-      - "9094:9094"
-    links:
-      - zookeeper
-    environment:
-      # Set the KAFKA_ADVERTISED_HOST_NAME to your laptop/work computer's hostname during development
-      - "KAFKA_ADVERTISED_HOST_NAME=192.168.0.164"
-      - "ZOOKEEPER_CONNECT=zookeeper:2181"
-      - "KAFKA_ADVERTISED_LISTENERS=INSIDE://:9092,OUTSIDE://192.168.0.164:9094"
-      - "KAFKA_LISTENERS=INSIDE://:9092,OUTSIDE://:9094"
-      - "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT"
-      - "KAFKA_INTER_BROKER_LISTENER_NAME=INSIDE"
-    volumes:
-      - kafka-data:/kafka/data:rw
-      - kafka-logs:/kafka/logs:rw
+  ###############################################################################################################################
+  ####################Kafka
 
-  connect:
-    image: debezium/connect:latest
-    restart: unless-stopped
-    ports:
-      - "8043:8043"
-    links:
-      - kafka
-      - apicurio-registry
-    environment:
-      - BOOTSTRAP_SERVERS=kafka:9092
-      - GROUP_ID=1
-      - CONFIG_STORAGE_TOPIC=my_connect_configs
-      - OFFSET_STORAGE_TOPIC=my_connect_offsets
-      - ENABLE_APICURIO_CONVERTERS=true
-      - STATUS_STORAGE_TOPIC=my_connect_statuses
-
-  # AKHQ, a Kafka UI, From https://github.com/tchiotludo/akhq/blob/dev/docker-compose.yml
-  akhq:
-    image: tchiotludo/akhq
-    restart: unless-stopped
-    environment:
-      AKHQ_CONFIGURATION: |
-        akhq:
-          connections:
-            docker-kafka-server:
-              properties:
-                bootstrap.servers: "kafka:9092"
-              schema-registry:
-                url: "http://apicurio-registry:8085/apis/registry/v2"
-              connect:
-                - name: "connect"
-                  url: "http://connect:8043"
-    ports:
-      - "8084:8080"
-    links:
-      - kafka
-      - connect
-
-  apicurio-registry:
-    image: apicurio/apicurio-registry-sql:latest-release
-    hostname: apicurio-registry
-    restart: unless-stopped
+  broker:
+    image: confluentinc/cp-kafka:latest
+    hostname: broker
+    container_name: broker
     depends_on:
-      - postgreSQL
+      zookeeper:
+        condition: service_healthy
     ports:
-      - "8085:8080"
+      - '29092:29092'
+      - '9092:9092'
+      - '9101:9101'
     environment:
-      - "REGISTRY_DATASOURCE_URL=jdbc:postgresql://192.168.0.164:5432/apicurio-registry"
-      - "REGISTRY_DATASOURCE_USERNAME=dhiego"
-      - "REGISTRY_DATASOURCE_PASSWORD=f4x4d8p6"
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+    healthcheck:
+      test: nc -z localhost 9092 || exit -1
+      start_period: 15s
+      interval: 5s
+      timeout: 10s
+      retries: 10
+
+  debezium:
+    image: debezium/connect:2.5
+    restart: always
+    container_name: debezium
+    hostname: debezium
+    depends_on:
+      postgres:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
+    ports:
+      - '8083:8083'
+    environment:
+      BOOTSTRAP_SERVERS: broker:29092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: connect_configs
+      STATUS_STORAGE_TOPIC: connect_statuses
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      ENABLE_DEBEZIUM_SCRIPTING: 'true'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'curl',
+          '--silent',
+          '--fail',
+          '-X',
+          'GET',
+          'http://debezium:8083/connectors',
+        ]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:latest
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      broker:
+        condition: service_healthy
+    ports:
+      - '8081:8081'
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: broker:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+
+    healthcheck:
+      start_period: 10s
+      interval: 10s
+      retries: 20
+      test: curl --user superUser:superUser --fail --silent --insecure http://localhost:8081/subjects --output /dev/null || exit 1
+
+  rest-proxy:
+    image: confluentinc/cp-kafka-rest:latest
+    depends_on:
+      broker:
+        condition: service_healthy
+    ports:
+      - '8082:8082'
+    hostname: rest-proxy
+    container_name: rest-proxy
+    environment:
+      KAFKA_REST_HOST_NAME: rest-proxy
+      KAFKA_REST_BOOTSTRAP_SERVERS: 'broker:29092'
+      KAFKA_REST_LISTENERS: 'http://0.0.0.0:8082'
+
+  debezium-ui:
+    image: debezium/debezium-ui:2.5
+#    restart: always
+    container_name: debezium-ui
+    hostname: debezium-ui
+    depends_on:
+      debezium:
+        condition: service_healthy
+    ports:
+      - '3003:8080'
+    environment:
+      KAFKA_CONNECT_URIS: http://debezium:8083

@@ -272,7 +272,7 @@ services:
       retries: 10
 
   debezium:
-    image: debezium/connect:2.5
+    image: debezium/connect:2.4
     restart: always
     container_name: debezium
     hostname: debezium
@@ -301,7 +301,7 @@ services:
           '--fail',
           '-X',
           'GET',
-          'http://debezium:8083/connectors',
+          'http://localhost:8083/connectors',
         ]
       start_period: 10s
       interval: 10s
@@ -343,7 +343,7 @@ services:
       KAFKA_REST_LISTENERS: 'http://0.0.0.0:8082'
 
   debezium-ui:
-    image: debezium/debezium-ui:2.5
+    image: debezium/debezium-ui:2.4
 #    restart: always
     container_name: debezium-ui
     hostname: debezium-ui

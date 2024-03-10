@@ -52,7 +52,7 @@ services:
       - ./postgres/postgresDATA:/var/lib/postgresql/data
     restart: unless-stopped
     #    command: [ "-c", "shared_buffers=3GB", "-c", "max_connections=1000", "-c", "work_mem=1GB", "-c", "random_page_cost=1.1", "-c", "effective_io_concurrency=200", "-c", "wal_buffers=128MB", "-c", "wal_level=logical" ]
-    command: [ "-c", "max_connections=1000", "-c", "random_page_cost=1.1", "-c", "effective_io_concurrency=200", "-c", "wal_level=minimal" ]
+    command: [ "-c", "max_connections=1000", "-c", "random_page_cost=1.1", "-c", "effective_io_concurrency=200" ]
     healthcheck:
       test: [ 'CMD', 'psql', '-U', 'dhiego',"-d", "metabase", '-c', 'SELECT 1' ]
       interval: 10s

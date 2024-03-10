@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    restart: unless-stopped
+    container_name: watchtower
+    command: --interval 30 mqtt openhab watchtower
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/timezone:/etc/timezone:ro
+    ports:
+      - "5555:8080"
+
+  openhab:
+    image: openhab/openhab:latest
+    container_name: openhab
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      CRYPTO_POLICY: "unlimited"
+      EXTRA_JAVA_OPTS: "-Duser.timezone=Europe/Berlin"
+      OPENHAB_HTTP_PORT: "8080"
+      OPENHAB_HTTPS_PORT: "8443"
+    volumes:
+      - ./openhab/openhab_addons:/openhab/addons
+      - ./openhab/openhab_conf:/openhab/conf
+      - ./openhab/openhab_userdata:/openhab/userdata
+    privileged: true
+
+  mosquitto:
+    container_name: mqtt
+    image: eclipse-mosquitto:latest
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    ports:
+      - "1883:1883"
+      - "8883:8883"
+      - "9001:9001"
+
+  postgres:
+    image: postgres/postgres:16-alpine
+    container_name: postgres
+    volumes:
+      - ./postgres/postgresDATA:/var/lib/postgresql/data
+    restart: unless-stopped
+    #    command: [ "-c", "shared_buffers=3GB", "-c", "max_connections=1000", "-c", "work_mem=1GB", "-c", "random_page_cost=1.1", "-c", "effective_io_concurrency=200", "-c", "wal_buffers=128MB", "-c", "wal_level=logical" ]
+    command: [ "-c", "max_connections=1000", "-c", "random_page_cost=1.1", "-c", "effective_io_concurrency=200", "-c", "wal_level=minimal" ]
+    healthcheck:
+      test: [ 'CMD', 'psql', '-U', 'dhiego',"-d", "metabase", '-c', 'SELECT 1' ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=de-DE'
+      TZ: Europe/Berlin
+      PGTZ: Europe/Berlin
+      POSTGRES_DB: metabase
+      POSTGRES_USER: dhiego
+      POSTGRES_PASSWORD: f4x4d8p6
+    ports:
+      - '5432:5432'

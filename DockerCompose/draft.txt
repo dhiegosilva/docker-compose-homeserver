@@ -1,0 +1,1 @@
+sudo sshfs -o allow_other,IdentityFile=/home/kb/.ssh/id_rsa dhiego-silva@192.168.0.73:/home/dhiego-silva/ /home/dhiego-silva/test

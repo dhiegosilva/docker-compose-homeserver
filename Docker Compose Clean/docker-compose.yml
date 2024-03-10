@@ -46,7 +46,7 @@ services:
       - "9001:9001"
 
   postgres:
-    image: postgres/postgres:16-alpine
+    image: postgres:16-alpine
     container_name: postgres
     volumes:
       - ./postgres/postgresDATA:/var/lib/postgresql/data

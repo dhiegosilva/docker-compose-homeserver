@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metabase-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: metabase
+  template:
+    metadata:
+      labels:
+        app: metabase
+    spec:
+      containers:
+        - name: metabase-container
+          image: metabase/metabase:latest
+          ports:
+            - containerPort: 3000  # Adjust the port as needed
+          env:
+            - name: MB_DB_TYPE
+              value: "postgres"
+            - name: MB_DB_DBNAME
+              value: "metabase"
+            - name: MB_DB_PORT
+              #value: "31602"
+              value: "5432"
+            - name: MB_DB_USER
+              value: "dhiego"
+            - name: MB_DB_PASS
+              value: "f4x4d8p6"
+            - name: MB_DB_HOST
+              #value: "192.168.0.143"
+              value: postgres
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: metabase
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 3000
+      nodePort: 30000
+  selector:
+    app: metabase

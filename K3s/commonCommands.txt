@@ -1,0 +1,17 @@
+kubectl apply -f kubernetes-postgres.yaml
+
+kubectl get pods -o wide
+kubectl get deployments -o wide # test
+kubectl get pv -o wide
+kubectl get pvc -o wide
+kubectl get pods -o wide
+kubectl get svc -o wide
+
+kubectl delete deployments odoo-deployment
+kubectl delete pods
+kubectl delete pvc --all
+kubectl delete pv postgres-pv-volume
+kubectl delete svc odoo-service
+
+kubectl logs --follow odoo-deployment-5bd9c5659c-9x4vf
+
